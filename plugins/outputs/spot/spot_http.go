@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-
 	"io"
 	"io/ioutil"
 	"log"
@@ -71,10 +70,8 @@ const (
 
 type HTTP struct {
 	URL                   string            `toml:"url"`
-	Timeout               config.Duration `toml:"timeout"`
+	Timeout               config.Duration   `toml:"timeout"`
 	Method                string            `toml:"method"`
-	Username              string            `toml:"username"`
-	Password              string            `toml:"password"`
 	Headers               map[string]string `toml:"headers"`
 	ClientID              string            `toml:"client_id"`
 	ClientSecret          string            `toml:"client_secret"`
@@ -84,10 +81,14 @@ type HTTP struct {
 	Excludes              []string          `toml:"excludes"`
 	ContentEncoding       string            `toml:"content_encoding"`
 	CustomContentEncoding string            `toml:"custom_content_encoding"`
+	// authenticate
+	Auth authConfig `toml:"auth"`
+
 	tls.ClientConfig
 
 	client     *http.Client
 	serializer serializers.Serializer
+	security   Secret
 }
 
 func (h *HTTP) SetSerializer(serializer serializers.Serializer) {
@@ -143,6 +144,7 @@ func (h *HTTP) Connect() error {
 
 	h.client = client
 
+	h.security = createSecret(h.Auth)
 	return nil
 }
 
@@ -223,9 +225,7 @@ func (h *HTTP) write(requestID string, reqBody io.Reader) error {
 		return err
 	}
 
-	if h.Username != "" || h.Password != "" {
-		req.SetBasicAuth(h.Username, h.Password)
-	}
+	h.security.Secure(req)
 
 	req.Header.Set("terminus-request-id", requestID)
 	req.Header.Set("Content-Type", defaultContentType)
