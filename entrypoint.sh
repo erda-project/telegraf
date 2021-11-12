@@ -107,9 +107,8 @@ else
     fi
 fi
 
-if [ $TELEGRAF_PPROF_PORT ]; then
-    TELEGRAF_PPROF_ADDR="--pprof-addr 0.0.0.0:${TELEGRAF_PPROF_PORT}"
-fi
+
+TELEGRAF_PPROF_ADDR="--pprof-addr 0.0.0.0:6060"
 
 # run
 if [[ $TELEGRAF_STATIC_CONF != '' ]]; then
