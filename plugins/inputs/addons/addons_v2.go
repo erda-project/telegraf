@@ -158,6 +158,10 @@ func (a *Addons) extractInfo(pod *apiv1.Pod) (map[string]string, error) {
 		if strings.Contains(envs["SELF_HOST"], "sentinel") {
 			return nil, nil
 		}
+		// redis failover 部署的 redis，不监控 sentinel
+		if val, existed := pod.Labels["app.kubernetes.io/component"]; existed && val == "sentinel" {
+			return nil, nil
+		}
 	}
 	return envs, nil
 	// return envs, typ, envs["ADDON_ID"], fmt.Sprintf("%s-%s", typ, key), err
@@ -222,6 +226,11 @@ func (a *Addons) handleEnvMap(pod *apiv1.Pod, envs map[string]string) map[string
 			envs["SELF_PORT"] = port
 		} else {
 			envs["SELF_PORT"] = "6379"
+		}
+		if passwd, ok := envs["requirepass"]; ok {
+			if _, existed := envs["REDIS_PASSWORD"]; !existed {
+				envs["REDIS_PASSWORD"] = passwd
+			}
 		}
 	}
 	if envs["SELF_HOST"] == "" { // use FQDN
