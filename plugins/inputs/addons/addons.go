@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net"
 	"reflect"
 	"regexp"
@@ -22,13 +23,16 @@ import (
 	"github.com/influxdata/telegraf/filter"
 	"github.com/influxdata/telegraf/plugins/inputs"
 	gdocker "github.com/influxdata/telegraf/plugins/inputs/global/docker"
-	gk8s "github.com/influxdata/telegraf/plugins/inputs/global/kubernetes"
 	"github.com/influxdata/telegraf/plugins/parsers"
 	"github.com/influxdata/toml"
 	"github.com/influxdata/toml/ast"
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
+	watchtools "k8s.io/client-go/tools/watch"
 )
 
 var dockerEventFilterArgs = []filters.KeyValuePair{
@@ -44,16 +48,16 @@ var dockerEventFilterArgs = []filters.KeyValuePair{
 }
 
 var startInputEvents = map[string]struct{}{
-	"start":   struct{}{},
-	"unpause": struct{}{},
+	"start":   {},
+	"unpause": {},
 }
 var stopInputEvents = map[string]struct{}{
-	"die":     struct{}{},
-	"destroy": struct{}{},
-	"kill":    struct{}{},
-	"oom":     struct{}{},
-	"stop":    struct{}{},
-	"pause":   struct{}{},
+	"die":     {},
+	"destroy": {},
+	"kill":    {},
+	"oom":     {},
+	"stop":    {},
+	"pause":   {},
 }
 
 type Addons struct {
@@ -138,40 +142,101 @@ func (a *Addons) Gather(acc telegraf.Accumulator) error {
 	return errs.MaybeUnwrap()
 }
 
-func (a *Addons) watchK8sPod(acc telegraf.Accumulator) {
-	client, to := gk8s.GetClient()
-	for client == nil {
-		// 可能 gk8s 还没初始化好
-		time.Sleep(1 * time.Second)
-		client, to = gk8s.GetClient()
+func (a *Addons) watchPods(acc telegraf.Accumulator) {
+	for {
+		select {
+		case <-a.closeCh:
+			log.Printf("I! [addon] watchPods addon input closed")
+			return
+		default:
+			a.watchK8sPodOnNode(acc)
+		}
+	}
+}
+
+func (a *Addons) getInClusterRetryWatcher(acc telegraf.Accumulator) (*watchtools.RetryWatcher, error) {
+	rc, err := rest.InClusterConfig()
+	if err != nil {
+		log.Printf("E! [addon] getInClusterRetryWatcher get Config err: %s", err)
+		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), to)
-	defer cancel()
-	err := a.loadAddonsFromK8s(ctx, acc, client)
+	cs, err := kubernetes.NewForConfig(rc)
 	if err != nil {
-		log.Printf("E! loadAddonsFromK8s err: %s", err)
-		return
+		log.Printf("E! [addon] getInClusterRetryWatcher get Clientset err: %s", err)
+		return nil, err
 	}
-	w, err := client.CoreV1().Pods("").Watch(ctx, metav1.ListOptions{
+
+	err = a.loadAddonsFromK8s(context.Background(), acc, cs)
+	if err != nil {
+		log.Printf("E! [addon] getInClusterRetryWatcher loadAddonsFromK8s err: %s", err)
+		return nil, err
+	}
+
+	PodList, err := cs.CoreV1().Pods("").List(context.Background(), metav1.ListOptions{
 		LabelSelector: a.LabelSelector,
 		FieldSelector: a.FieldSelector,
 	})
-	defer w.Stop()
 	if err != nil {
-		acc.AddError(err)
-		return
+		log.Printf("E! [addon] getInClusterRetryWatcher list pods error: %v", err)
+		return nil, err
 	}
+
+	retryWatcher, err := watchtools.NewRetryWatcher(PodList.GetResourceVersion(), &cache.ListWatch{
+		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			options.FieldSelector = a.FieldSelector
+			options.LabelSelector = a.LabelSelector
+			return cs.CoreV1().Pods("").Watch(context.Background(), options)
+		},
+	})
+
+	if err != nil {
+		log.Printf("E! [addon] getInClusterRetryWatcher watch pods error: %v", err)
+		return nil, err
+	}
+
+	return retryWatcher, nil
+}
+
+func (a *Addons) watchK8sPodOnNode(acc telegraf.Accumulator) {
+	var (
+		retryWatcher *watchtools.RetryWatcher
+		err          error
+	)
+	// Wait retryWatcher ready.
 	for {
+		retryWatcher, err = a.getInClusterRetryWatcher(acc)
+		if err != nil {
+			log.Printf("E! [addon] watchK8sPodOnNode get retry warcher error: %v", err)
+		} else if retryWatcher != nil {
+			break
+		}
+
 		select {
-		case <-ctx.Done():
-			return
 		case <-a.closeCh:
 			return
-		case event, ok := <-w.ResultChan():
+		case <-time.After(time.Duration(rand.Int()%10) * time.Second):
+			log.Printf("E! [addon] watchK8sPodOnNode failed to get retry watcher, try agin")
+		}
+	}
+
+	defer func() {
+		retryWatcher.Stop()
+		log.Printf("I! [addon] watchK8sPodOnNode watch pods resource done")
+		retryWatcher.Done()
+	}()
+
+	for {
+		select {
+		case <-a.closeCh:
+			log.Printf("I! [addon] watchK8sPodOnNode receive a.closeCh")
+			return
+		case event, ok := <-retryWatcher.ResultChan():
 			if !ok {
+				log.Printf("E! [addon] watchK8sPodOnNode retryWatcher.ResultChan not OK")
 				return
 			}
+
 			pod, ok := event.Object.(*apiv1.Pod)
 			if !ok {
 				continue
@@ -201,7 +266,6 @@ func (a *Addons) watchK8sPod(acc telegraf.Accumulator) {
 			}
 		}
 	}
-
 }
 
 func (a *Addons) watchDockerContainer(acc telegraf.Accumulator) {
@@ -257,7 +321,7 @@ func (a *Addons) Start(acc telegraf.Accumulator) error {
 	if err != nil {
 		return fmt.Errorf("fail to init: %s", err)
 	}
-	go a.watchK8sPod(acc)
+	go a.watchPods(acc)
 	return nil
 }
 
