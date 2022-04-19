@@ -77,7 +77,7 @@ func (s *Summary) gatherContainerStats(
 		tm = time.Now()
 	}
 
-	s.gatherContainerProcessStats(tags, fields, info, acc, tm) // must be first
+	//s.gatherContainerProcessStats(tags, fields, info, acc, tm) // must be first
 
 	gtx := s.newGatherContext(id, tags, fields, envs, info, stats)
 	s.gatherContainerMem(gtx)

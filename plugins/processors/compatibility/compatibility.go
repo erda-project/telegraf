@@ -29,13 +29,6 @@ func (c *Compatibility) Apply(in ...telegraf.Metric) []telegraf.Metric {
 		out = append(out, m)
 		if m.Name() == "host_summary" {
 			out = append(out, c.convertToMachineSummary(m))
-		} else if m.Name() == "docker_container_summary" {
-			splits := c.splitDockerMetrics(m)
-			out = append(out, splits...)
-			// 过滤 k8s pause 容器
-			if _, ok := m.GetTag("podsandbox"); !ok {
-				out = append(out, c.convertToContainerSummary(m))
-			}
 		}
 	}
 	return out
@@ -130,7 +123,7 @@ func (c *Compatibility) splitHostMetrics(m telegraf.Metric) []telegraf.Metric {
 
 func (c *Compatibility) splitDockerMetrics(m telegraf.Metric) []telegraf.Metric {
 	var out []telegraf.Metric
-	tags := m.Tags()
+	//tags := m.Tags()
 	// mem
 	// fields := make(map[string]interface{})
 	// if val, ok := m.GetField("mem_allocation"); ok {
@@ -241,27 +234,26 @@ func (c *Compatibility) splitDockerMetrics(m telegraf.Metric) []telegraf.Metric 
 	// }
 
 	// status
-	// todo 仍有业务使用，暂时保留
-	fields := make(map[string]interface{})
-	if val, ok := m.GetField("oomkilled"); ok {
-		fields["oomkilled"] = val
-	}
-	if val, ok := m.GetField("pid"); ok {
-		fields["pid"] = val
-	}
-	if val, ok := m.GetField("exitcode"); ok {
-		fields["exitcode"] = val
-	}
-	if val, ok := m.GetField("started_at"); ok {
-		fields["started_at"] = val
-	}
-	if val, ok := m.GetField("finished_at"); ok {
-		fields["finished_at"] = val
-	}
-	if len(fields) > 0 {
-		status, _ := metric.New("docker_container_status", tags, fields, m.Time())
-		out = append(out, status)
-	}
+	//fields := make(map[string]interface{})
+	//if val, ok := m.GetField("oomkilled"); ok {
+	//	fields["oomkilled"] = val
+	//}
+	//if val, ok := m.GetField("pid"); ok {
+	//	fields["pid"] = val
+	//}
+	//if val, ok := m.GetField("exitcode"); ok {
+	//	fields["exitcode"] = val
+	//}
+	//if val, ok := m.GetField("started_at"); ok {
+	//	fields["started_at"] = val
+	//}
+	//if val, ok := m.GetField("finished_at"); ok {
+	//	fields["finished_at"] = val
+	//}
+	//if len(fields) > 0 {
+	//	status, _ := metric.New("docker_container_status", tags, fields, m.Time())
+	//	out = append(out, status)
+	//}
 	return out
 }
 
