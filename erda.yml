@@ -6,6 +6,9 @@ values:
         replicas: 1
         request_cpu: 0.1
         request_mem: 128
+    test:
+        request_cpu: 0.1
+        request_mem: 128
 envs:
     UPGRADE_1_4_0: 0
 services:
