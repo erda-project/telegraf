@@ -32,7 +32,7 @@ buildctl --addr tcp://buildkitd.default.svc.cluster.local:1234 \
     --tlskey=/.buildkit/key.pem \
     build \
     --frontend dockerfile.v0 \
-    --opt platform=linux/arm64,linux/amd64 \
+    --opt platform=${PLATFORMS} \
     --local context=/.pipeline/container/context/telegraf \
     --local dockerfile=/.pipeline/container/context/telegraf \
     --output type=image,name=${image},push=true
