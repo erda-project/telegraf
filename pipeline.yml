@@ -1,26 +1,30 @@
 version: "1.1"
-
-on:
+name: ""
+"on":
   push:
     branches:
       - master
       - release/*
     tags:
       - v*
-
 stages:
   - stage:
       - git-checkout:
           alias: telegraf
+          description: 代码仓库克隆
           params:
             depth: 1
   - stage:
       - extract-repo-version:
+          alias: extract-repo-version
+          description: 从 git 代码仓库中解析提交信息，生成仓库版本
           params:
             git_dir: ${{ dirs.telegraf }}
   - stage:
       - custom-script:
           alias: build-telegraf
+          description: 运行自定义命令
+          image: registry.erda.cloud/erda-actions/custom-script-action:2.0-20230423123122-5fd86c2
           commands:
             - cd ${{ dirs.telegraf }}
             - echo $(pwd)
@@ -36,13 +40,14 @@ stages:
   - stage:
       - release:
           alias: release-telegraf
+          description: 用于打包完成时，向dicehub 提交完整可部署的dice.yml。用户若没在pipeline.yml里定义该action，CI会自动在pipeline.yml里插入该action
           params:
             check_diceyml: false
             dice_yml: ${{ dirs.telegraf }}/erda.yml
-            tag_version: ${{ outputs.extract-repo-version.version }}
             image:
               telegraf: ${{ outputs.build-telegraf.image }}
               telegraf-app: ${{ outputs.build-telegraf.image }}
               telegraf-app-edge: ${{ outputs.build-telegraf.image }}
               telegraf-edge: ${{ outputs.build-telegraf.image }}
               telegraf-platform: ${{ outputs.build-telegraf.image }}
+            tag_version: ${{ outputs.extract-repo-version.version }}
