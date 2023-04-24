@@ -20,12 +20,9 @@ echo "image=${image}"
 #    --label "commit=$(git rev-parse HEAD)" \
 #    --label "build-time=$(date '+%Y-%m-%d %T%z')" \
 #    -f "Dockerfile" .
-#
-#docker login -u "${DOCKER_REGISTRY_USERNAME}" -p "${DOCKER_REGISTRY_PASSWORD}" "${DOCKER_REGISTRY}"
-#
 #docker push "${image}"
 
-
+docker login -u "${DOCKER_REGISTRY_USERNAME}" -p "${DOCKER_REGISTRY_PASSWORD}" "${DOCKER_REGISTRY}"
 buildctl --addr tcp://buildkitd.default.svc.cluster.local:1234 \
     --tlscacert=/.buildkit/ca.pem \
     --tlscert=/.buildkit/cert.pem \
