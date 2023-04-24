@@ -10,7 +10,7 @@ RUN make telegraf
 FROM registry.erda.cloud/erda-x/oraclelinux:7
 
 WORKDIR /app
-RUN mkdir -p /app/conf && yum -y install sysstat ntp libpcap http://mirror.centos.org/altarch/7/updates/$(uname -m)/Packages/libpcap-devel-1.5.3-13.el7_9.$(uname -m).rpm
+RUN mkdir -p /app/conf && yum -y install sysstat ntp libpcap http://mirror.centos.org/$(if [[ $(uname -m) == x86_64 ]]; then echo centos; else echo altarch; fi)/7/updates/$(uname -m)/Packages/libpcap-devel-1.5.3-13.el7_9.$(uname -m).rpm
 
 COPY --from=build /root/build/telegraf /app/
 COPY --from=build /root/build/conf /app/conf
