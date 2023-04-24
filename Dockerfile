@@ -1,6 +1,6 @@
-FROM registry.erda.cloud/erda-x/golang:1.17 as build
+FROM registry.erda.cloud/erda-x/all-in-one:7 as build
 
-RUN apt-get update && apt-get -y install libpcap-dev
+RUN yum -y install sysstat ntp libpcap libpcap-devel
 
 COPY . /root/build
 WORKDIR /root/build
