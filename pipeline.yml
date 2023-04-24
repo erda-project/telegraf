@@ -32,7 +32,7 @@ stages:
             - export DOCKER_REGISTRY=${{ configs.docker_registry }}
             - export DOCKER_REGISTRY_USERNAME=${{ configs.docker_registry_username }}
             - export DOCKER_REGISTRY_PASSWORD=${{ configs.docker_registry_password }}
-            - export PLATFORMS=${{ configs.platforms }}
+            - export PLATFORMS=${{ configs.PLATFORMS }}
             - export IMAGE_TAG=${{ outputs.extract-repo-version.image_tag }}
             - ./build.sh
           resources:
