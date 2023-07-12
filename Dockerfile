@@ -1,26 +1,16 @@
-FROM registry.erda.cloud/retag/golang:1.16.6 as build
-
+FROM registry.erda.cloud/erda-x/golang:1.17 as build
+ 
 RUN apt-get update && apt-get -y install libpcap-dev
 
 COPY . /root/build
 WORKDIR /root/build
 
-ENV GOPROXY="https://goproxy.cn"
-RUN set -ex && echo "Asia/Shanghai" > /etc/timezone
-
 RUN make telegraf
 
-FROM registry.cn-hangzhou.aliyuncs.com/terminus/terminus-centos:base
-
-RUN mkdir -p /app/conf
+FROM registry.erda.cloud/erda-x/oraclelinux:7
 
 WORKDIR /app
-
-RUN echo "Asia/Shanghai" >/etc/timezone
-
-RUN yum -y install sysstat
-RUN yum -y install ntp
-RUN yum -y install libpcap libpcap-devel
+RUN mkdir -p /app/conf && yum -y install sysstat ntp libpcap http://mirror.centos.org/$(if [[ $(uname -m) == x86_64 ]]; then echo centos; else echo altarch; fi)/7/updates/$(uname -m)/Packages/libpcap-devel-1.5.3-13.el7_9.$(uname -m).rpm
 
 COPY --from=build /root/build/telegraf /app/
 COPY --from=build /root/build/conf /app/conf
