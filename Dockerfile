@@ -1,4 +1,4 @@
-FROM registry.erda.cloud/erda-x/golang:1.17 as build
+FROM registry.erda.cloud/erda-x/golang:1.17-buster-archive AS build
  
 RUN apt-get update && apt-get -y install libpcap-dev
 
